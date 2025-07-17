@@ -37,6 +37,35 @@ class SolarPredictionDataUpdateCoordinator(DataUpdateCoordinator):
             update_interval=FALLBACK_SCAN_INTERVAL,
         )
 
+    # KORREKTUR: Die Signatur der Methode wurde angepasst, um alle Argumente zu akzeptieren
+    async def _async_refresh(self, *args, **kwargs) -> None:
+        """Override the refresh logic to be smarter on startup."""
+        if self.data is None:
+            cached_file_content = await self._store.async_load()
+            if cached_file_content:
+                self.data = cached_file_content.get("data")
+                if self.data:
+                    self.last_update_success = True
+
+        if self.data:
+            try:
+                next_request_epoch = self.data["preferredNextApiRequestAt"][
+                    "epochTimeUtc"
+                ]
+                now_epoch = int(dt_util.utcnow().timestamp())
+
+                if now_epoch < next_request_epoch:
+                    _LOGGER.debug(
+                        "Skipping API refresh, using cached data as it is still valid."
+                    )
+                    self._schedule_refresh()
+                    return
+            except (KeyError, TypeError):
+                _LOGGER.warning("Cached data is malformed, forcing a new API request.")
+
+        # KORREKTUR: Alle Original-Argumente werden an die Super-Methode weitergereicht
+        await super()._async_refresh(*args, **kwargs)
+
     async def _async_update_data(self) -> dict:
         """Fetch data from API endpoint and fallback to cache."""
         try:
@@ -50,7 +79,6 @@ class SolarPredictionDataUpdateCoordinator(DataUpdateCoordinator):
             async with session.get(api_url, params=params) as response:
                 response.raise_for_status()
                 data = await response.json()
-                # Speichern der Rohdaten der API in einem Wrapper
                 await self._store.async_save({"data": data})
                 self.last_api_error = None
                 return data
@@ -72,8 +100,15 @@ class SolarPredictionDataUpdateCoordinator(DataUpdateCoordinator):
             raise UpdateFailed(f"Error communicating with API: {err}") from err
 
     def _schedule_refresh(self) -> None:
-        """Schedule the next refresh based on API suggestion."""
-        # Diese Methode bleibt unverändert
+        """Schedule the next refresh based on API suggestion or fallback on error."""
+        if self.last_api_error:
+            _LOGGER.warning(
+                "API error detected. Falling back to the default refresh interval of %s.",
+                self.update_interval,
+            )
+            super()._schedule_refresh()
+            return
+
         if self.last_update_success and self.data:
             try:
                 next_request_epoch = self.data["preferredNextApiRequestAt"][
@@ -93,4 +128,5 @@ class SolarPredictionDataUpdateCoordinator(DataUpdateCoordinator):
                 _LOGGER.warning(
                     "Could not determine next refresh time, falling back. Error: %s", e
                 )
+
         super()._schedule_refresh()

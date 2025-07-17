@@ -2,20 +2,33 @@
   "config": {
     "step": {
       "user": {
+        "title": "Solar Prediction Setup",
+        "description": "Please enter the access token and the project identifier (e.g., your email address).",
         "data": {
-          "host": "[%key:common::config_flow::data::host%]",
-          "username": "[%key:common::config_flow::data::username%]",
-          "password": "[%key:common::config_flow::data::password%]"
+          "access_token": "Access Token",
+          "project": "Project"
         }
       }
     },
     "error": {
       "cannot_connect": "[%key:common::config_flow::error::cannot_connect%]",
-      "invalid_auth": "[%key:common::config_flow::error::invalid_auth%]",
       "unknown": "[%key:common::config_flow::error::unknown%]"
     },
     "abort": {
       "already_configured": "[%key:common::config_flow::abort::already_configured_device%]"
+    }
+  },
+  "entity": {
+    "sensor": {
+      "api_status": {
+        "name": "API Status"
+      },
+      "today_total": {
+        "name": "Today Total"
+      },
+      "tomorrow_total": {
+        "name": "Tomorrow Total"
+      }
     }
   }
 }
